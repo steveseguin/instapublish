@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Viewer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+        header {
+            padding: 15px;
+            background-color: #333;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            font-size: 1.2rem;
+            font-weight: normal;
+        }
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .input-container {
+            flex: 1;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #ddd;
+        }
+        .output-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        textarea {
+            flex: 1;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: none;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        iframe {
+            flex: 1;
+            border: none;
+            background-color: white;
+        }
+        .buttons {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #fullscreenBtn {
+            background-color: #2196F3;
+        }
+        #fullscreenBtn:hover {
+            background-color: #0b7dda;
+        }
+        .fullscreen-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            z-index: 1000;
+            display: none;
+        }
+        .fullscreen-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>HTML Viewer</h1>
+        <div class="buttons">
+            <button id="renderBtn">Render</button>
+            <button id="fullscreenBtn">Fullscreen</button>
+        </div>
+    </header>
+    <div class="main-container">
+        <div class="input-container">
+            <textarea id="codeInput" placeholder="Paste your HTML, JavaScript, or CSS here..."></textarea>
+        </div>
+        <div class="output-container">
+            <iframe id="outputFrame"></iframe>
+        </div>
+    </div>
+    <div class="fullscreen-container" id="fullscreenContainer">
+        <button class="close-btn" id="closeBtn">×</button>
+        <iframe id="fullscreenFrame" class="fullscreen-iframe"></iframe>
+    </div>
+
+    <script>
+        const codeInput = document.getElementById('codeInput');
+        const outputFrame = document.getElementById('outputFrame');
+        const renderBtn = document.getElementById('renderBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenContainer = document.getElementById('fullscreenContainer');
+        const fullscreenFrame = document.getElementById('fullscreenFrame');
+        const closeBtn = document.getElementById('closeBtn');
+
+        function detectContentType(code) {
+            code = code.trim();
+            
+            // Check for HTML document
+            if (code.startsWith('<!DOCTYPE') || code.startsWith('<html')) {
+                return 'full-html';
+            }
+            
+            // Check for body content
+            if (code.startsWith('<body') || 
+                (code.includes('<body') && code.includes('</body>'))) {
+                return 'body-html';
+            }
+            
+            // Check for JavaScript
+            if (code.startsWith('<script') || 
+                code.startsWith('function ') || 
+                code.includes('document.') || 
+                code.includes('window.') ||
+                code.includes('const ') ||
+                code.includes('let ') ||
+                code.includes('var ')) {
+                return 'javascript';
+            }
+            
+            // Check for CSS
+            if (code.startsWith('<style') || 
+                code.includes('{') && code.includes('}') && 
+                (code.includes(':') || code.includes('@media'))) {
+                return 'css';
+            }
+            
+            // Default to HTML fragment
+            return 'html-fragment';
+        }
+
+        function formatContent(code, type) {
+            switch(type) {
+                case 'full-html':
+                    return code;
+                
+                case 'body-html':
+                    return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+${code}
+</html>`;
+                
+                case 'javascript':
+                    if (code.startsWith('<script') && code.endsWith('</script>')) {
+                        return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    ${code}
+</body>
+</html>`;
+                    } else {
+                        return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <script>
+    ${code}
+    </script>
+</body>
+</html>`;
+                    }
+                
+                case 'css':
+                    if (code.startsWith('<style') && code.endsWith('</style>')) {
+                        return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    ${code}
+</head>
+<body>
+    <div class="content">
+        <h1>CSS Preview</h1>
+        <p>This is a paragraph to demonstrate your CSS.</p>
+        <button>Button Element</button>
+        <a href="#">Link Element</a>
+        <ul>
+            <li>List item 1</li>
+            <li>List item 2</li>
+            <li>List item 3</li>
+        </ul>
+    </div>
+</body>
+</html>`;
+                    } else {
+                        return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+    ${code}
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>CSS Preview</h1>
+        <p>This is a paragraph to demonstrate your CSS.</p>
+        <button>Button Element</button>
+        <a href="#">Link Element</a>
+        <ul>
+            <li>List item 1</li>
+            <li>List item 2</li>
+            <li>List item 3</li>
+        </ul>
+    </div>
+</body>
+</html>`;
+                    }
+                
+                case 'html-fragment':
+                default:
+                    return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    ${code}
+</body>
+</html>`;
+            }
+        }
+
+        function renderCode() {
+            const code = codeInput.value;
+            if (!code.trim()) return;
+            
+            const contentType = detectContentType(code);
+            const formattedContent = formatContent(code, contentType);
+            
+            const doc = outputFrame.contentDocument || outputFrame.contentWindow.document;
+            doc.open();
+            doc.write(formattedContent);
+            doc.close();
+        }
+
+        function showFullscreen() {
+            if (!codeInput.value.trim()) return;
+            
+            const contentType = detectContentType(codeInput.value);
+            const formattedContent = formatContent(codeInput.value, contentType);
+            
+            const doc = fullscreenFrame.contentDocument || fullscreenFrame.contentWindow.document;
+            doc.open();
+            doc.write(formattedContent);
+            doc.close();
+            
+            fullscreenContainer.style.display = 'block';
+        }
+
+        function closeFullscreen() {
+            fullscreenContainer.style.display = 'none';
+        }
+
+        renderBtn.addEventListener('click', renderCode);
+        fullscreenBtn.addEventListener('click', showFullscreen);
+        closeBtn.addEventListener('click', closeFullscreen);
+
+        // Auto-render when pasting content
+        codeInput.addEventListener('paste', () => {
+            setTimeout(renderCode, 0);
+        });
+    </script>
+</body>
+</html>
