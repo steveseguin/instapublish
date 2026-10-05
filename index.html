@@ -195,7 +195,7 @@ ${code}
 </html>`;
                 
                 case 'javascript':
-                    if (code.startsWith('<script') && code.endsWith('</script>')) {
+                    if (code.startsWith('<script') && code.endsWith('<\/script>')) {
                         return `<!DOCTYPE html>
 <html>
 <head>
@@ -216,7 +216,7 @@ ${code}
 <body>
     <script>
     ${code}
-    </script>
+    <\/script>
 </body>
 </html>`;
                     }
